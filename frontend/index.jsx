@@ -21,6 +21,13 @@ function App() {
     const [nameInput, setNameInput] = useState("");
     const [planetInput, setPlanetInput] = useState("");
 
+    // Auth state
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [loggedIn, setLoggedIn] = useState(false);
+    const [authMode, setAuthMode] = useState("login"); // or "register"
+    const [authError, setAuthError] = useState("");
+
     // Fetch events periodically
     useEffect(() => {
         const interval = setInterval(() => {
@@ -36,12 +43,56 @@ function App() {
         fetch(`${BASE_URL}/sanctions/1`).then(res => res.json()).then(setSanctions);
     }, [empire]);
 
+    // Fetch empire after login
+    useEffect(() => {
+        if (!loggedIn || !username) return;
+        fetch(`${BASE_URL}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.empireId) {
+                fetch(`${BASE_URL}/empire/${data.empireId}`)
+                    .then(res => res.json())
+                    .then(setEmpire);
+            }
+        });
+    }, [loggedIn, username]);
+
+    // Auth handlers
+    const handleAuth = () => {
+        setAuthError("");
+        if (!username || !password) {
+            setAuthError("Username and password required");
+            return;
+        }
+        fetch(`${BASE_URL}/auth/${authMode}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) setAuthError(data.error);
+            else setLoggedIn(true);
+        });
+    };
+
+    const logout = () => {
+        setLoggedIn(false);
+        setUsername("");
+        setPassword("");
+        setEmpire(null);
+    };
+
     const createEmpire = () => {
-        if (!nameInput || !planetInput) return;
+        if (!nameInput || !planetInput || !username) return;
         fetch(`${BASE_URL}/empire/create`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: nameInput, planet: planetInput })
+            body: JSON.stringify({ name: nameInput, planet: planetInput, username })
         }).then(res => res.json()).then(data => setEmpire(data));
     };
 
@@ -79,6 +130,22 @@ function App() {
         });
     };
 
+    if (!loggedIn) {
+        return (
+            <div style={{ maxWidth: "400px", margin: "40px auto", fontFamily: "Arial, sans-serif", border: "1px solid #ccc", padding: 24, borderRadius: 8 }}>
+                <h2>{authMode === "login" ? "Login" : "Register"}</h2>
+                <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} style={{ display: "block", width: "100%", marginBottom: 8 }} />
+                <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={{ display: "block", width: "100%", marginBottom: 8 }} />
+                <button onClick={handleAuth} style={{ width: "100%", marginBottom: 8 }}>{authMode === "login" ? "Login" : "Register"}</button>
+                <button onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}
+                    style={{ width: "100%", background: "#eee" }}>
+                    {authMode === "login" ? "Need an account? Register" : "Already have an account? Login"}
+                </button>
+                {authError && <div style={{ color: "red", marginTop: 8 }}>{authError}</div>}
+            </div>
+        );
+    }
+
     if (!empire) {
         return (
             <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif" }}>
@@ -86,12 +153,17 @@ function App() {
                 <input placeholder="Empire Name" value={nameInput} onChange={e => setNameInput(e.target.value)} />
                 <input placeholder="Planet Name" value={planetInput} onChange={e => setPlanetInput(e.target.value)} />
                 <button onClick={createEmpire}>Create Empire</button>
+                <button onClick={logout} style={{ marginLeft: 16 }}>Logout</button>
             </div>
         );
     }
 
     return (
         <div style={{ maxWidth: "900px", margin: "0 auto", fontFamily: "Arial, sans-serif" }}>
+            <div style={{ textAlign: "right", margin: 8 }}>
+                <span>Logged in as <b>{username}</b></span>
+                <button onClick={logout} style={{ marginLeft: 16 }}>Logout</button>
+            </div>
             <AdBanner />
             <EmpireDashboard empire={empire} />
             <EmbargoList embargoes={embargoes} targetEmbargo={targetEmbargo} setTargetEmbargo={setTargetEmbargo} onIssue={issueEmbargo} />
